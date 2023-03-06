@@ -1,0 +1,64 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: mongodb-cronjob
+spec:
+  schedule: "11 17 * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  # "concurrencyPolicy" should be set to "Forbid"
+  # otherwise "successfulJobsHistoryLimit" and "failedJobsHistoryLimit" are meaningless
+  # use "concurrencyPolicy: Replace" if you don't need to retain job history
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      # terminate a Job
+      # takes precedence over its .spec.backoffLimit
+      # a Job that is retrying one or more failed Pods will not deploy additional Pods \
+      # once it reaches the time limit specified by activeDeadlineSeconds, even if the backoffLimit is not yet reached.
+      # activeDeadlineSeconds: 600
+      backoffLimit: 2
+      template:
+        spec:
+          # using "restartPolicy: Never" ensures failed pods are around to check logs, etc..
+          # job controller will start new pods to replace failed ones
+          restartPolicy: Never
+          containers:
+            - name: mongodb
+              image: mongo:4.2
+              imagePullPolicy: IfNotPresent
+              env:
+              - name: AZURE_STORAGE_ACCOUNT
+                valueFrom:
+                  secretKeyRef:
+                    name: azure-secret
+                    key: azurestorageaccountname
+              - name: AZURE_STORAGE_ACCESS_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: azure-secret
+                    key: azurestorageaccountkey
+              - name: MONGO_USERNAME
+                valueFrom:
+                  secretKeyRef:
+                    name: mongo-secret
+                    key: username
+              - name: MONGO_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: mongo-secret
+                    key: password
+              volumeMounts:
+                - mountPath: "/var/backup"
+                  name: pv-mongo
+              args:
+                  - /bin/sh
+                  - -c
+                  - cd /var/backup; date +"%d-%m-%y" | xargs -I% mkdir %; foldebyday=test2$(date +"%d-%m-%y");
+                    mongodump --host=20.9.115.149 --port=27017 --username=$MONGO_USERNAME --password=$MONGO_PASSWORD --gzip --archive="/var/backup/$folderbyday.gz"  --authenticationDatabase=FracProOps -d FracProOps
+
+          volumes:
+            - name: pv-mongo
+              persistentVolumeClaim:
+                claimName: pvc-mongo
+

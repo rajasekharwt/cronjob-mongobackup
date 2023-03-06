@@ -1,0 +1,9 @@
+persistence:
+  enabled: true
+  existingClaim: pvc-mongo
+  accessMode: ReadWriteOnce
+  size: 5Gi
+
+mongodump:
+  secret:
+    name: mongodump-secret
